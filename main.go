@@ -115,11 +115,25 @@ func ResponseError(w http.ResponseWriter, message string, code int) {
 	w.Write(resp)
 }
 
-func ValidateData(task Task) error {
+func ResponseSuccess(w http.ResponseWriter, response any, code int) {
+	resp, err := json.Marshal(response)
+	if err != nil {
+		ResponseError(w, "Ошибка сериализации", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(resp)
+}
+
+func ValidateData(data Task) (Task, error) {
+	task := data
+
 	now := time.Now()
 
 	if len(task.Title) == 0 {
-		return fmt.Errorf("Не указано поле Заголовок")
+		return task, fmt.Errorf("Не указано поле Заголовок")
 	}
 
 	if task.Date == "" {
@@ -128,7 +142,7 @@ func ValidateData(task Task) error {
 
 	taskDate, err := time.Parse("20060102", task.Date)
 	if err != nil {
-		return fmt.Errorf("Неподдерживаемый формат даты")
+		return task, fmt.Errorf("Неподдерживаемый формат даты")
 	}
 
 	if taskDate.Format("20060102") < now.Format("20060102") {
@@ -139,13 +153,13 @@ func ValidateData(task Task) error {
 		if task.Repeat != "" {
 			nextDate, err := NextDate(now, task.Date, task.Repeat)
 			if err != nil {
-				return fmt.Errorf("Неподдерживаемый формат даты")
+				return task, fmt.Errorf("Неподдерживаемый формат даты")
 			}
 			task.Date = nextDate
 		}
 	}
 
-	return nil
+	return task, nil
 }
 
 func main() {
@@ -190,6 +204,8 @@ func main() {
 	})
 	router.Get("/api/nextdate", handleGetNextDate)
 	router.Get("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
+		var tasks []Task
+
 		rows, err := db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date DESC")
 		if err != nil {
 			ResponseError(w, "Ошибка запроса БД", http.StatusInternalServerError)
@@ -197,7 +213,6 @@ func main() {
 		}
 		defer rows.Close()
 
-		var tasks []Task
 		for rows.Next() {
 			task := Task{}
 
@@ -215,23 +230,18 @@ func main() {
 			return
 		}
 
-		emptySlice := make([]Task, 0, 0)
 		if len(tasks) == 0 {
-			tasks = emptySlice
+			tasks = make([]Task, 0, 0)
 		}
-		if len(tasks) > 10 {
-			tasks = tasks[:10]
-		}
-		response := map[string][]Task{"tasks": tasks}
-		resp, err := json.Marshal(response)
-		if err != nil {
-			ResponseError(w, "Ошибка сериализации", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
 
+		limitTasks := 10
+
+		if len(tasks) > limitTasks {
+			tasks = tasks[:limitTasks]
+		}
+
+		response := map[string][]Task{"tasks": tasks}
+		ResponseSuccess(w, response, http.StatusOK)
 	})
 	router.Get("/api/task", func(w http.ResponseWriter, req *http.Request) {
 		id := req.FormValue("id")
@@ -251,15 +261,7 @@ func main() {
 			return
 		}
 
-		resp, err := json.Marshal(task)
-		if err != nil {
-			ResponseError(w, "Ошибка сериализации", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		ResponseSuccess(w, task, http.StatusOK)
 	})
 	router.Put("/api/task", func(w http.ResponseWriter, req *http.Request) {
 		var task Task
@@ -288,11 +290,13 @@ func main() {
 			return
 		}
 
-		err = ValidateData(task)
+		formattedTask, err := ValidateData(task)
 		if err != nil {
-			ResponseError(w, `{err}`, http.StatusBadRequest)
+			ResponseError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		task = formattedTask
 
 		res, err := db.Exec("UPDATE scheduler SET date = :date, title = :title, comment = :comment, repeat = :repeat WHERE id = :id",
 			sql.Named("id", task.Id),
@@ -316,15 +320,8 @@ func main() {
 			return
 		}
 
-		resp, err := json.Marshal(map[string][]Task{})
-		if err != nil {
-			ResponseError(w, "Ошибка сериализации", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		response := map[string][]Task{}
+		ResponseSuccess(w, response, http.StatusOK)
 	})
 	router.Post("/api/task", func(w http.ResponseWriter, req *http.Request) {
 		var task Task
@@ -342,11 +339,13 @@ func main() {
 			return
 		}
 
-		err = ValidateData(task)
+		formattedTask, err := ValidateData(task)
 		if err != nil {
-			ResponseError(w, `{err}`, http.StatusBadRequest)
+			ResponseError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		task = formattedTask
 
 		res, err := db.Exec("INSERT INTO scheduler (date, title, comment, repeat) VALUES (:date, :title, :comment, :repeat)",
 			sql.Named("date", task.Date),
@@ -364,15 +363,8 @@ func main() {
 			return
 		}
 
-		resp, err := json.Marshal(map[string]int64{"id": id})
-		if err != nil {
-			ResponseError(w, "Ошибка marshal", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(http.StatusCreated)
-		w.Write(resp)
+		response := map[string]int64{"id": id}
+		ResponseSuccess(w, response, http.StatusCreated)
 	})
 	router.Post("/api/task/done", func(w http.ResponseWriter, req *http.Request) {
 		id := req.FormValue("id")
@@ -380,6 +372,7 @@ func main() {
 			ResponseError(w, "Не указан идентификатор", http.StatusBadRequest)
 			return
 		}
+
 		task := Task{}
 
 		row := db.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = :id",
@@ -421,15 +414,8 @@ func main() {
 			}
 		}
 
-		resp, err := json.Marshal(map[string]Task{})
-		if err != nil {
-			ResponseError(w, "Ошибка marshal", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		response := map[string]Task{}
+		ResponseSuccess(w, response, http.StatusOK)
 	})
 
 	router.Delete("/api/task", func(w http.ResponseWriter, req *http.Request) {
@@ -438,7 +424,7 @@ func main() {
 			ResponseError(w, "Не указан идентификатор", http.StatusBadRequest)
 			return
 		}
-		fmt.Println(id)
+
 		res, err := db.Exec("DELETE FROM scheduler WHERE id = :id",
 			sql.Named("id", id))
 		if err != nil {
@@ -456,15 +442,8 @@ func main() {
 			return
 		}
 
-		resp, err := json.Marshal(map[string]Task{})
-		if err != nil {
-			ResponseError(w, "Ошибка marshal", http.StatusInternalServerError)
-			return
-		}
-		
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		response := map[string]Task{}
+		ResponseSuccess(w, response, http.StatusOK)
 	})
 	
 	fmt.Println("Server is listening port", PORT)
