@@ -5,16 +5,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/LenaRasp/go_final_project/utils"
 )
+
+var TimeLayout = "20060102"
 
 func NextDate(now time.Time, date string, repeat string) (string, error) {
 	if repeat == "" {
 		return "", fmt.Errorf("Пустая строка")
 	}
 	//Возвращаемая дата должна быть больше даты, указанной в переменной now.
-	dateTime, err := time.Parse(utils.TimeLayout, date)
+	dateTime, err := time.Parse(TimeLayout, date)
 	if err != nil {
 		return "", err
 	}
@@ -52,5 +52,5 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			dateTime = dateTime.AddDate(1, 0, 0)
 		}
 	}
-	return dateTime.Format(utils.TimeLayout), nil
+	return dateTime.Format(TimeLayout), nil
 }

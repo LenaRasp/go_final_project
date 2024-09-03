@@ -7,7 +7,7 @@ import (
 
 	"github.com/LenaRasp/go_final_project/models"
 	"github.com/LenaRasp/go_final_project/nextDate"
-	"github.com/LenaRasp/go_final_project/utils"
+	"github.com/LenaRasp/go_final_project/response"
 )
 
 func DoneTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
@@ -15,27 +15,27 @@ func DoneTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 
 	id := req.FormValue("id")
 	if id == "" {
-		utils.ResponseError(w, "Не указан идентификатор", http.StatusBadRequest)
+		response.Error(w, "Не указан идентификатор", http.StatusBadRequest)
 		return
 	}
 
-	row := db.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = :id",
+	row := db.QueryRow("SELECT * FROM scheduler WHERE id = :id",
 		sql.Named("id", id))
 
 	err := row.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
-		utils.ResponseError(w, "Ошибка сканирования БД", http.StatusInternalServerError)
+		response.Error(w, "Ошибка сканирования БД", http.StatusInternalServerError)
 		return
 	}
 
 	if task.Date == "" {
-		task.Date = time.Now().Format(utils.TimeLayout)
+		task.Date = time.Now().Format(nextDate.TimeLayout)
 	}
 
 	if task.Repeat != "" {
 		newDate, err := nextDate.NextDate(time.Now(), task.Date, task.Repeat)
 		if err != nil {
-			utils.ResponseError(w, "Ошибка формирования новой даты", http.StatusInternalServerError)
+			response.Error(w, "Ошибка формирования новой даты", http.StatusInternalServerError)
 			return
 		}
 		task.Date = newDate
@@ -45,7 +45,7 @@ func DoneTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 			sql.Named("date", task.Date))
 
 		if err != nil {
-			utils.ResponseError(w, "Ошибка db UPDATE", http.StatusInternalServerError)
+			response.Error(w, "Ошибка db UPDATE", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -53,11 +53,11 @@ func DoneTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 		_, err := db.Exec("DELETE FROM scheduler WHERE id = :id",
 			sql.Named("id", id))
 		if err != nil {
-			utils.ResponseError(w, "Ошибка db DELETE", http.StatusInternalServerError)
+			response.Error(w, "Ошибка db DELETE", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	response := map[string]models.Task{}
-	utils.ResponseSuccess(w, response, http.StatusOK)
+	jsonResponse := map[string]models.Task{}
+	response.Success(w, jsonResponse, http.StatusOK)
 }

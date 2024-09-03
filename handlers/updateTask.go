@@ -8,8 +8,7 @@ import (
 	"strconv"
 
 	"github.com/LenaRasp/go_final_project/models"
-	"github.com/LenaRasp/go_final_project/utils"
-	"github.com/LenaRasp/go_final_project/validations"
+	"github.com/LenaRasp/go_final_project/response"
 )
 
 func UpdateTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
@@ -18,30 +17,30 @@ func UpdateTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 
 	_, err := buf.ReadFrom(req.Body)
 	if err != nil {
-		utils.ResponseError(w, "Ошибка ReadFrom", http.StatusBadRequest)
+		response.Error(w, "Ошибка ReadFrom", http.StatusBadRequest)
 		return
 	}
 
 	err = json.Unmarshal(buf.Bytes(), &task)
 	if err != nil {
-		utils.ResponseError(w, "Ошибка Unmarshal", http.StatusBadRequest)
+		response.Error(w, "Ошибка Unmarshal", http.StatusBadRequest)
 		return
 	}
 
 	if task.Id == "" {
-		utils.ResponseError(w, "Не указан идентификатор", http.StatusBadRequest)
+		response.Error(w, "Не указан идентификатор", http.StatusBadRequest)
 		return
 	}
 
 	_, err = strconv.Atoi(task.Id)
 	if err != nil {
-		utils.ResponseError(w, "Невалидный идентификатор", http.StatusBadRequest)
+		response.Error(w, "Невалидный идентификатор", http.StatusBadRequest)
 		return
 	}
 
-	formattedTask, err := validations.ValidateData(task)
+	formattedTask, err := models.Task.ValidateData(task)
 	if err != nil {
-		utils.ResponseError(w, err.Error(), http.StatusBadRequest)
+		response.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -55,20 +54,20 @@ func UpdateTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 		sql.Named("repeat", task.Repeat))
 
 	if err != nil {
-		utils.ResponseError(w, "Ошибка обновления db", http.StatusInternalServerError)
+		response.Error(w, "Ошибка обновления db", http.StatusInternalServerError)
 		return
 	}
 
 	row, err := res.RowsAffected()
 	if err != nil {
-		utils.ResponseError(w, "Ошибка обновления db", http.StatusInternalServerError)
+		response.Error(w, "Ошибка обновления db", http.StatusInternalServerError)
 		return
 	}
 	if row == 0 {
-		utils.ResponseError(w, "Задача не найдена", http.StatusInternalServerError)
+		response.Error(w, "Задача не найдена", http.StatusInternalServerError)
 		return
 	}
 
-	response := map[string][]models.Task{}
-	utils.ResponseSuccess(w, response, http.StatusOK)
+	jsonResponse := map[string][]models.Task{}
+	response.Success(w, jsonResponse, http.StatusOK)
 }

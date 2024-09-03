@@ -4,14 +4,16 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	_ "modernc.org/sqlite"
 	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/LenaRasp/go_final_project/handlers"
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
+	_ "modernc.org/sqlite"
+
+	"github.com/LenaRasp/go_final_project/database"
+	"github.com/LenaRasp/go_final_project/handlers"
 )
 
 func main() {
@@ -20,20 +22,21 @@ func main() {
 		log.Fatal("Ошибка при загрузке .env file")
 	}
 	PORT := os.Getenv("TODO_PORT")
+	DBFILE := os.Getenv("TODO_DBFILE")
 
-	db, err := sql.Open("sqlite", "scheduler.db")
+	db, err := sql.Open("sqlite", DBFILE)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer db.Close()
 
-	appPath, err := os.Executable()
+	appPath, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	dbFile := filepath.Join(filepath.Dir(appPath), "scheduler.db")
+	dbFile := filepath.Join(appPath, DBFILE)
 	_, err = os.Stat(dbFile)
 
 	var install bool
@@ -43,25 +46,7 @@ func main() {
 	}
 
 	if install {
-		_, err = db.Exec(`CREATE TABLE IF NOT EXISTS scheduler (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			date TEXT,
-			title TEXT,
-			comment TEXT,
-			repeat TEXT
-		)`)
-
-		if err != nil {
-			fmt.Println("Ошибка при создании таблицы:", err)
-			return
-		}
-
-		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_date ON scheduler(date);")
-		if err != nil {
-			fmt.Println("Ошибка при создании индекса:", err)
-			return
-		}
-		fmt.Println("Таблица и индекс успешно созданы")
+		database.CreateDB(db)
 	} else {
 		fmt.Println("База данных уже существует")
 	}

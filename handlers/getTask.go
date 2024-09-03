@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/LenaRasp/go_final_project/models"
-	"github.com/LenaRasp/go_final_project/utils"
+	"github.com/LenaRasp/go_final_project/response"
 )
 
 func GetTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
@@ -13,18 +13,18 @@ func GetTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 
 	id := req.FormValue("id")
 	if id == "" {
-		utils.ResponseError(w, "Не указан идентификатор", http.StatusBadRequest)
+		response.Error(w, "Не указан идентификатор", http.StatusBadRequest)
 		return
 	}
 
-	row := db.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = :id",
+	row := db.QueryRow("SELECT * FROM scheduler WHERE id = :id",
 		sql.Named("id", id))
 
 	err := row.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
-		utils.ResponseError(w, "Ошибка сканирования БД", http.StatusInternalServerError)
+		response.Error(w, "Ошибка сканирования БД", http.StatusInternalServerError)
 		return
 	}
 
-	utils.ResponseSuccess(w, task, http.StatusOK)
+	response.Success(w, task, http.StatusOK)
 }

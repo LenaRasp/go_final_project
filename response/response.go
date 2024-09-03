@@ -1,13 +1,11 @@
-package utils
+package response
 
 import (
 	"encoding/json"
 	"net/http"
 )
 
-var TimeLayout = "20060102"
-
-func ResponseError(w http.ResponseWriter, message string, code int) {
+func Error(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(code)
 
@@ -18,17 +16,17 @@ func ResponseError(w http.ResponseWriter, message string, code int) {
 		return
 	}
 
-	w.Write(resp)
+	_ , _ = w.Write(resp)
 }
 
-func ResponseSuccess(w http.ResponseWriter, response any, code int) {
+func Success(w http.ResponseWriter, response any, code int) {
 	resp, err := json.Marshal(response)
 	if err != nil {
-		ResponseError(w, "Ошибка сериализации", http.StatusInternalServerError)
+		Error(w, "Ошибка сериализации", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	w.Write(resp)
+	_ , _ = w.Write(resp)
 }

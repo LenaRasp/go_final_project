@@ -7,8 +7,7 @@ import (
 	"net/http"
 
 	"github.com/LenaRasp/go_final_project/models"
-	"github.com/LenaRasp/go_final_project/utils"
-	"github.com/LenaRasp/go_final_project/validations"
+	"github.com/LenaRasp/go_final_project/response"
 )
 
 func AddTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
@@ -17,19 +16,19 @@ func AddTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 
 	_, err := buf.ReadFrom(req.Body)
 	if err != nil {
-		utils.ResponseError(w, "Ошибка ReadFrom", http.StatusBadRequest)
+		response.Error(w, "Ошибка ReadFrom", http.StatusBadRequest)
 		return
 	}
 
 	err = json.Unmarshal(buf.Bytes(), &task)
 	if err != nil {
-		utils.ResponseError(w, "Ошибка Unmarshal", http.StatusBadRequest)
+		response.Error(w, "Ошибка Unmarshal", http.StatusBadRequest)
 		return
 	}
 
-	formattedTask, err := validations.ValidateData(task)
+	formattedTask, err := models.Task.ValidateData(task)
 	if err != nil {
-		utils.ResponseError(w, err.Error(), http.StatusBadRequest)
+		response.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -41,16 +40,16 @@ func AddTask(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 		sql.Named("comment", task.Comment),
 		sql.Named("repeat", task.Repeat))
 	if err != nil {
-		utils.ResponseError(w, "Ошибка db", http.StatusInternalServerError)
+		response.Error(w, "Ошибка db", http.StatusInternalServerError)
 		return
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		utils.ResponseError(w, "Ошибка id db", http.StatusInternalServerError)
+		response.Error(w, "Ошибка id db", http.StatusInternalServerError)
 		return
 	}
 
-	response := map[string]int64{"id": id}
-	utils.ResponseSuccess(w, response, http.StatusCreated)
+	jsonResponse := map[string]int64{"id": id}
+	response.Success(w, jsonResponse, http.StatusCreated)
 }

@@ -2,20 +2,20 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/LenaRasp/go_final_project/models"
-	"github.com/LenaRasp/go_final_project/utils"
+	"github.com/LenaRasp/go_final_project/nextDate"
+	"github.com/LenaRasp/go_final_project/response"
 )
 
-func GetTasks(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+const limit = 10
+
+func reqToDb(w http.ResponseWriter, rows *sql.Rows) []models.Task {
 	var tasks []models.Task
 
-	rows, err := db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date DESC")
-	if err != nil {
-		utils.ResponseError(w, "Ошибка запроса БД", http.StatusInternalServerError)
-		return
-	}
 	defer rows.Close()
 
 	for rows.Next() {
@@ -23,16 +23,16 @@ func GetTasks(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 		err := rows.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 		if err != nil {
-			utils.ResponseError(w, "Ошибка сканирования БД", http.StatusInternalServerError)
-			return
+			response.Error(w, "Ошибка сканирования БД", http.StatusInternalServerError)
+			return nil
 		}
 
 		tasks = append(tasks, task)
 	}
 
 	if err := rows.Err(); err != nil {
-		utils.ResponseError(w, "Ошибка БД", http.StatusInternalServerError)
-		return
+		response.Error(w, "Ошибка БД", http.StatusInternalServerError)
+		return nil
 	}
 
 	if len(tasks) == 0 {
@@ -45,6 +45,43 @@ func GetTasks(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		tasks = tasks[:limitTasks]
 	}
 
-	response := map[string][]models.Task{"tasks": tasks}
-	utils.ResponseSuccess(w, response, http.StatusOK)
+	return tasks
+}
+
+func GetTasks(w http.ResponseWriter, req *http.Request, db *sql.DB) {
+	var tasks []models.Task
+
+	search := req.FormValue("search")
+
+	if len(search) > 0 {
+		dateTime, err := time.Parse("02.01.2006", search)
+		if err != nil {
+			rows, err := db.Query("SELECT * FROM scheduler WHERE title LIKE :search OR comment LIKE :search ORDER BY date LIMIT :limit ", sql.Named("search", fmt.Sprint("%" + search + "%")), sql.Named("limit", limit))
+			if err != nil {
+				response.Error(w, "Ошибка запроса БД", http.StatusInternalServerError)
+				return
+			}
+
+			tasks = reqToDb(w, rows)
+		} else {
+			rows, err := db.Query("SELECT * FROM scheduler WHERE date = :date ORDER BY date LIMIT :limit", sql.Named("date", dateTime.Format(nextDate.TimeLayout)), sql.Named("limit", limit))
+			if err != nil {
+				response.Error(w, "Ошибка запроса БД", http.StatusInternalServerError)
+				return
+			}
+
+			tasks = reqToDb(w, rows)	
+		}
+	} else {
+		rows, err := db.Query("SELECT * FROM scheduler ORDER BY date LIMIT :limit", sql.Named("limit", limit))
+		if err != nil {
+			response.Error(w, "Ошибка запроса БД", http.StatusInternalServerError)
+			return
+		}
+		
+		tasks = reqToDb(w, rows)
+	}
+
+	jsonResponse := map[string][]models.Task{"tasks": tasks}
+	response.Success(w, jsonResponse, http.StatusOK)
 }
